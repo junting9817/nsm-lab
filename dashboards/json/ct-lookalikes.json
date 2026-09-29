@@ -1,0 +1,642 @@
+{
+ "uid": "ct-lookalikes",
+ "title": "CT \u2014 brand lookalikes",
+ "description": "Names resembling Korean bank, courier and telecom brands that hold a TLS certificate. Generated candidates checked against Certificate Transparency; nothing is ever visited.",
+ "tags": [
+  "ct",
+  "threat-intel"
+ ],
+ "timezone": "utc",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "",
+ "time": {
+  "from": "now-90d",
+  "to": "now"
+ },
+ "editable": false,
+ "panels": [
+  {
+   "type": "text",
+   "title": "What this is",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 3
+   },
+   "options": {
+    "mode": "markdown",
+    "content": "Names that **resemble** a Korean bank, courier or telecom brand and have a TLS certificate. Resemblance is all it means: a name here may be the brand's own, a partner, a defensive registration or a squatter. Nothing is ever resolved, fetched or visited \u2014 the only source is the public Certificate Transparency index.\n\nCandidates are **generated**, not searched for, so this finds only impersonations the generator imagined. See `docs/limits.md`."
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Names imagined",
+   "description": "Every name the generator can think of for the watchlist's 14 brands.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 3,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT count() AS v FROM ct.candidates"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Asked about",
+   "description": "Candidates that have had a usable answer from crt.sh. Errors do not count.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 3,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExactIf(domain, status != 'error') AS v FROM ct.checks"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Coverage",
+   "description": "How much of the imagined space has been asked about. The rest is unknown, not clear.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 3,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT round(100 * uniqExactIf(domain, status != 'error') / (SELECT count() FROM ct.candidates), 1) AS v FROM ct.checks"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Names that exist",
+   "description": "Candidates for which crt.sh holds at least one certificate.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 3,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExactIf(domain, status = 'found') AS v FROM ct.checks"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "To review",
+   "description": "Findings whose shape is not explained by an established business.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 3,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT countIf(tier = 'review') AS v FROM ct.findings"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "To watch",
+   "description": "A step below review: worth a second look when the rest is quiet.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 3,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT countIf(tier = 'watch') AS v FROM ct.findings"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Ranked findings \u2014 what a person should read",
+   "description": "Every name that exists, ranked by named signals. `display` differs from `domain` only for homoglyphs \u2014 that difference is the whole point of the class.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 7,
+    "w": 24,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT score, tier, domain, display, brand, klass AS class, arrayStringConcat(reasons, ' \u00b7 ') AS why FROM ct.findings ORDER BY score DESC, domain ASC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "score"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 70
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "tier"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       },
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "review": {
+            "color": "orange",
+            "index": 0,
+            "text": "review"
+           },
+           "watch": {
+            "color": "yellow",
+            "index": 1,
+            "text": "watch"
+           },
+           "weak": {
+            "color": "text",
+            "index": 2,
+            "text": "weak"
+           },
+           "noise": {
+            "color": "text",
+            "index": 3,
+            "text": "noise"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Coverage by class \u2014 where the blind spots are",
+   "description": "Homoglyph is the class a reader cannot catch, so an unasked homoglyph candidate is the most expensive kind of gap.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 17,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT c.klass AS class, uniqExactIf(k.domain, k.status != 'error') AS asked, count() - uniqExactIf(k.domain, k.status != 'error') AS unasked FROM ct.candidates AS c LEFT JOIN ct.checks AS k ON k.domain = c.domain GROUP BY class ORDER BY count() DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 80,
+      "gradientMode": "none",
+      "axisPlacement": "auto"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "xTickLabelRotation": 0,
+    "showValue": "auto",
+    "stacking": "normal",
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom",
+     "calcs": []
+    }
+   }
+  },
+  {
+   "type": "table",
+   "title": "Answers over time",
+   "description": "crt.sh fails on roughly a quarter of requests; errors leave a name overdue rather than marking it checked.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 17,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT toDate(checked_at) AS day, countIf(status = 'found') AS found, countIf(status = 'absent') AS absent, countIf(status = 'error') AS errors FROM ct.checks GROUP BY day ORDER BY day DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "filterable": false
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   }
+  },
+  {
+   "type": "table",
+   "title": "Certificates behind the top findings",
+   "description": "A short, recent certificate history is the interesting shape. Years of renewals is somebody's business.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 24,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT e.candidate AS name, count() AS certificates, min(e.not_before) AS first_seen, max(e.not_before) AS last_seen, any(e.issuer_name) AS issuer FROM ct.certificates AS e INNER JOIN (SELECT domain FROM ct.findings WHERE tier IN ('review','watch','weak')) AS f ON f.domain = e.candidate GROUP BY name ORDER BY certificates ASC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "filterable": false
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   }
+  }
+ ]
+}

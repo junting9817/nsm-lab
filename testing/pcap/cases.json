@@ -1,0 +1,49 @@
+{
+  "_comment": "PCAP validation cases. primary_sid is the rule the PCAP was built for; expect_sids is the full list of SIDs that must alert. Alerts outside the list are only reported as unexpected (not a failure). PCAPs are built by generate_samples.py.",
+  "cases": [
+    {
+      "name": "scan-nmap-nse-http",
+      "pcap": "samples/scan-nmap-nse-http.pcap",
+      "attack_technique": "T1595.002",
+      "description": "External scanner requests the web server with the default Nmap NSE User-Agent",
+      "primary_sid": 2009358,
+      "expect_sids": [
+        2009358
+      ]
+    },
+    {
+      "name": "attack-response-id-root",
+      "pcap": "samples/attack-response-id-root.pcap",
+      "attack_technique": "T1059.004",
+      "description": "After a successful command injection, the id output (uid=0(root)) comes back in the HTTP response",
+      "primary_sid": 2100498,
+      "expect_sids": [
+        2100498,
+        2019284
+      ]
+    },
+    {
+      "name": "c2-dns-nxransomware",
+      "pcap": "samples/c2-dns-nxransomware.pcap",
+      "attack_technique": "T1071.004",
+      "description": "Infected host looks up the NxRansomware C2 domain (0cf5ff34.ngrok.io) over DNS",
+      "primary_sid": 2025143,
+      "expect_sids": [
+        2025143,
+        2022642,
+        2066094
+      ]
+    },
+    {
+      "name": "exploit-apache-path-traversal",
+      "pcap": "samples/exploit-apache-path-traversal.pcap",
+      "attack_technique": "T1190",
+      "description": "Apache 2.4.49 path traversal to /bin/sh (CVE-2021-41773), modeled on RedTail botnet requests seen against the sensor",
+      "primary_sid": 2034125,
+      "expect_sids": [
+        2034125,
+        2011465
+      ]
+    }
+  ]
+}

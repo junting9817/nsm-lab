@@ -1,0 +1,240 @@
+# NSM stack: ClickHouse, Grafana, Vector (Phase 1) and the Suricata/Zeek sensors (Phase 2)
+# Memory limits: docs/architecture.md section 3 (container total ≤ 70% of RAM = 5,561 MiB)
+# Secrets come from .env (created by setup-stack.sh). Every image version is pinned.
+name: nsm
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+secrets:
+  ch_vector_password:
+    environment: CH_VECTOR_PASSWORD
+  ch_responder_password:
+    environment: CH_RESPONDER_PASSWORD
+  responder_webhook_token:
+    environment: RESPONDER_WEBHOOK_TOKEN
+
+networks:
+  nsm:
+    ipam:
+      config:
+        # Must match the network allowed per ClickHouse account (ingest/clickhouse/users.d).
+        - subnet: 172.30.0.0/24
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3.33.24
+    container_name: nsm-clickhouse
+    restart: unless-stopped
+    mem_limit: 2048m
+    memswap_limit: 2048m
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    cap_add:
+      - SYS_NICE # thread priorities (only a warning without it)
+      - IPC_LOCK # mlock of the executable
+    environment:
+      # Accounts are defined in users.d; stop the image from configuring the default account itself.
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+      CH_VECTOR_PASSWORD: ${CH_VECTOR_PASSWORD:?set CH_VECTOR_PASSWORD in .env}
+      CH_GRAFANA_PASSWORD: ${CH_GRAFANA_PASSWORD:?set CH_GRAFANA_PASSWORD in .env}
+      CH_RESPONDER_PASSWORD: ${CH_RESPONDER_PASSWORD:?set CH_RESPONDER_PASSWORD in .env}
+    volumes:
+      - /data/clickhouse:/var/lib/clickhouse
+      # Mount single files: mounting the whole directory would hide the image's docker_related_config.xml.
+      - ./ingest/clickhouse/config.d/nsm-server.xml:/etc/clickhouse-server/config.d/nsm-server.xml:ro
+      - ./ingest/clickhouse/users.d/nsm-users.xml:/etc/clickhouse-server/users.d/nsm-users.xml:ro
+    ports:
+      - "127.0.0.1:8123:8123" # for host scripts; never exposed externally
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *logging
+    networks: [nsm]
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    container_name: nsm-grafana
+    restart: unless-stopped
+    # 256m: OOM-killed repeatedly during startup (2026-09-13). 512m: OOM-killed on 2026-09-14 10:19 when a web path scanner sent
+    # 209 requests in 23 s on top of 326 MiB anon baseline (7 dashboards + alerting). docs/architecture.md section 3.
+    mem_limit: 768m
+    memswap_limit: 768m
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    ports:
+      # Exposed externally by user decision (docs/architecture.md D3). Compensating controls: the settings below and the VPC firewall.
+      - "0.0.0.0:80:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?set GRAFANA_ADMIN_USER in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+      # Brute-force protection: per-account is on by default; per-IP is off by default, so turn it on.
+      GF_SECURITY_DISABLE_BRUTE_FORCE_LOGIN_PROTECTION: "false"
+      GF_SECURITY_DISABLE_IP_ADDRESS_LOGIN_PROTECTION: "false"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_SECURITY_CONTENT_SECURITY_POLICY: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_SYNC: grafana-clickhouse-datasource@4.21.2
+      # Go soft memory limit below the cgroup limit: the runtime collects harder under a request burst instead of being killed.
+      GOMEMLIMIT: 640MiB
+      # Only the ClickHouse datasource is used. Each bundled backend datasource runs as its own ~22–37 MiB process, and every
+      # loaded plugin is attack surface on an internet-facing Grafana, so the unused ones are not loaded.
+      GF_PLUGINS_DISABLE_PLUGINS: elasticsearch,grafana-postgresql-datasource,grafana-pyroscope-datasource,influxdb,jaeger,loki,mssql,mysql,opentsdb,prometheus,tempo,zipkin,cloudwatch,grafana-azure-monitor-datasource,stackdriver,graphite,grafana-testdata-datasource,grafana-advisor-app,grafana-exploretraces-app,grafana-lokiexplore-app,grafana-metricsdrilldown-app,grafana-pyroscope-app
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # Referenced as $CH_GRAFANA_PASSWORD in the datasource provisioning file
+      CH_GRAFANA_PASSWORD: ${CH_GRAFANA_PASSWORD:?set CH_GRAFANA_PASSWORD in .env}
+      # Referenced as $RESPONDER_WEBHOOK_TOKEN by the alert contact point (dashboards/provisioning/alerting)
+      RESPONDER_WEBHOOK_TOKEN: ${RESPONDER_WEBHOOK_TOKEN:?set RESPONDER_WEBHOOK_TOKEN in .env}
+    volumes:
+      - /data/grafana:/var/lib/grafana
+      - ./dashboards/provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards/json:/etc/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *logging
+    networks: [nsm]
+
+  vector:
+    image: timberio/vector:0.58.0-debian
+    container_name: nsm-vector
+    restart: unless-stopped
+    mem_limit: 256m
+    memswap_limit: 256m
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    command: ["--config", "/etc/vector/vector.yaml"]
+    # The password is passed as a /run/secrets file, not an environment variable (see the top of ingest/vector/vector.yaml)
+    secrets:
+      - ch_vector_password
+    volumes:
+      - ./ingest/vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - /data/vector:/var/lib/vector
+      - /data/logs:/data/logs:ro # raw Suricata EVE, Zeek JSON and pulled honeypot events
+      - /data/geoip:/data/geoip:ro # DB-IP Lite databases (infra/scripts/nsm-geoip-update.sh)
+    logging: *logging
+    networks: [nsm]
+
+  # --- response (Phase 6) — Grafana alert webhook → block decision → VPC firewall deny rule ------------------
+  responder:
+    image: python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+    container_name: nsm-responder
+    restart: unless-stopped
+    mem_limit: 128m
+    memswap_limit: 128m
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    # No read_only: Compose cannot inject environment-sourced secrets into a read-only container. The code is mounted
+    # read-only and the process runs as nobody with no capabilities, so it can only write to world-writable temp dirs.
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Python as PID 1 ignores SIGTERM, so every stop waited 10 s for SIGKILL (exit 137); an init process forwards it.
+    init: true
+    working_dir: /app
+    command: ["python3", "/app/responder.py", "serve"]
+    environment:
+      # dry-run records decisions without touching the firewall; enforce needs infra/terraform/response.tf applied
+      # and the VM on the nsm-sensor service account (docs/architecture.md section 13).
+      RESPONDER_MODE: ${RESPONDER_MODE:-dry-run}
+      NEVER_BLOCK_FILES: /etc/nsm/never-block.txt:/etc/nsm/never-block.local
+      PYTHONDONTWRITEBYTECODE: "1"
+    secrets:
+      - ch_responder_password
+      - responder_webhook_token
+    volumes:
+      - ./response/webhook:/app:ro
+      - ./response/never-block.txt:/etc/nsm/never-block.txt:ro
+      - /etc/nsm/never-block.local:/etc/nsm/never-block.local:ro # this sensor's and the honeypot's IPs (setup-response.sh)
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *logging
+    networks: [nsm]
+
+  # --- sensors (Phase 2) — capture ens4 with AF_PACKET on the host network ---------------------------
+  suricata:
+    image: jasonish/suricata:8.0.6
+    container_name: nsm-suricata
+    restart: unless-stopped
+    network_mode: host
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    # Only the capabilities the entrypoint needs to chown directories and drop to the suricata user, plus capture
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE, CHOWN, FOWNER, DAC_OVERRIDE, SETUID, SETGID, SETPCAP]
+    security_opt: ["no-new-privileges:true"]
+    # List settings (outputs, af-packet, rule-files) come from the --include file; single values inside maps use --set.
+    # An include replaces whole top-level nodes, so maps such as detect/stream are only changed key by key here.
+    command:
+      - --af-packet # every interface in the af-packet list (ens4 + nsm-replay0 for replay)
+      - --include=/nsm/suricata/nsm.yaml
+      - --set=vars.address-groups.HOME_NET=[10.128.0.0/9]
+      - --set=runmode=workers
+      - --set=max-pending-packets=1024
+      - --set=detect.profile=low
+      - --set=flow.memcap=64mb
+      - --set=flow.prealloc=2000
+      - --set=stream.memcap=64mb
+      - --set=stream.reassembly.memcap=128mb
+      - --set=defrag.memcap=16mb
+      - --set=host.memcap=16mb
+      - --set=host.prealloc=500
+      - --set=stats.interval=8 # below Vector's ~10 s idle-file poll, so alerts are read at once (docs/kpi.md)
+      - --set=threshold-file=/nsm/suricata/threshold.config # conditional suppressions (docs/tuning-log.md)
+    volumes:
+      - ./sensors/suricata:/nsm/suricata:ro # nsm.yaml, threshold.config
+      - ./detections/suricata:/nsm/rules:ro
+      - /data/logs/suricata:/var/log/suricata
+      - /data/pcap:/var/log/suricata/pcap
+      - /data/suricata:/var/lib/suricata
+    healthcheck:
+      test: ["CMD-SHELL", "suricatasc -c uptime | grep -q OK"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *logging
+
+  zeek:
+    image: zeek/zeek:8.0.10
+    container_name: nsm-zeek
+    restart: unless-stopped
+    network_mode: host
+    mem_limit: 768m
+    memswap_limit: 768m
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW]
+    security_opt: ["no-new-privileges:true"]
+    working_dir: /logs
+    # -C: ignore outbound checksums left empty by virtio checksum offload
+    command: ["zeek", "-C", "-i", "af_packet::ens4", "/nsm/zeek/nsm-local.zeek"]
+    # Give Zeek time to rotate and flush open logs after SIGTERM
+    stop_grace_period: 30s
+    volumes:
+      - ./sensors/zeek:/nsm/zeek:ro
+      - /data/logs/zeek:/logs
+    logging: *logging

@@ -1,0 +1,621 @@
+{
+  "uid": "nsm-response",
+  "title": "NSM — Response",
+  "description": "Phase 6: automated blocking — decisions, the active block list, firewall changes and time to block.",
+  "tags": [
+    "nsm",
+    "phase6",
+    "response"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "schemaVersion": 41,
+  "templating": {
+    "list": [
+      {
+        "type": "custom",
+        "name": "mode",
+        "label": "Responder mode",
+        "description": "enforce = rows that changed the real firewall; dry-run = what would have happened",
+        "query": "enforce,dry-run",
+        "current": {
+          "text": "enforce",
+          "value": "enforce"
+        },
+        "options": [
+          {
+            "text": "enforce",
+            "value": "enforce",
+            "selected": true
+          },
+          {
+            "text": "dry-run",
+            "value": "dry-run",
+            "selected": false
+          }
+        ],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active blocks",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS active FROM (SELECT ip, argMax(action, created_at) AS last_action, argMax(tuple(expires_at), created_at).1 AS until, argMax(trigger, created_at) AS last_trigger, argMax(rule, created_at) AS last_rule, argMax(reason, created_at) AS last_reason, max(created_at) AS decided FROM nsm.response_actions WHERE mode = '${mode}' AND action IN ('block', 'release') GROUP BY ip) WHERE last_action = 'block' AND until > now64(3)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "IPs currently in the block list for the selected mode (dry-run: the list the rule would have)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Blocks",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS blocks FROM nsm.response_actions WHERE mode = '${mode}' AND action = 'block' AND $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Block decisions in the time range (automatic and manual)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Observed",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS observed FROM nsm.response_actions WHERE mode = '${mode}' AND action = 'observe' AND $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Alerts from observe-only triggers (RSP-003): recorded, never blocked",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Rejected",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS rejected FROM nsm.response_actions WHERE mode = '${mode}' AND action = 'reject' AND $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Refused decisions: never-block list, private or invalid addresses, suppression, caps",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Median evidence → block",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT median(dateDiff('millisecond', a.evidence_at, p.applied_at)) / 1000 AS seconds FROM nsm.response_actions AS a INNER JOIN (SELECT applied_at, arrayJoin(added) AS range FROM nsm.response_applies WHERE mode = '${mode}' AND result != 'error') AS p ON p.range = concat(a.ip, '/32') WHERE a.mode = '${mode}' AND a.action = 'block' AND a.evidence_at IS NOT NULL AND p.applied_at >= a.created_at AND $__timeFilter(a.created_at) AND (a.mode != 'enforce' OR parseDateTime64BestEffortOrNull(JSONExtractString(a.detail, 'startsAt')) >= a.created_at - INTERVAL 20 MINUTE)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "MTTR as defined in docs/kpi.md: first evidence of the activity → the firewall rule containing the IP (dry-run: when the list would have been pushed). Enforce-mode blocks decided from a repeat notification of an older alert are excluded (docs/kpi.md)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Last reconciler result",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT concat(argMax(result, applied_at), ' · ', toString(dateDiff('minute', max(applied_at), now64(3))), ' min ago') AS last FROM nsm.response_applies WHERE mode = '${mode}'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Latest firewall change (or error). The reconciler only writes a row when the list changes",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^last$/",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Active block list",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT ip, last_trigger AS trigger, last_rule AS rule, last_reason AS reason, decided AS blocked_at, until AS expires_at, dateDiff('minute', now64(3), until) AS minutes_left FROM (SELECT ip, argMax(action, created_at) AS last_action, argMax(tuple(expires_at), created_at).1 AS until, argMax(trigger, created_at) AS last_trigger, argMax(rule, created_at) AS last_rule, argMax(reason, created_at) AS last_reason, max(created_at) AS decided FROM nsm.response_actions WHERE mode = '${mode}' AND action IN ('block', 'release') GROUP BY ip) WHERE last_action = 'block' AND until > now64(3) ORDER BY blocked_at DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Release early: sudo response/firewall/nsm-response.sh release <ip> \"<reason>\" [suppress]",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Decisions over time",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT $__timeInterval(created_at) AS time, action, count() AS decisions FROM nsm.response_actions WHERE mode = '${mode}' AND $__timeFilter(created_at) GROUP BY time, action ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "description": "block / observe / reject / release per interval",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Rejections by reason",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT replaceRegexpOne(reason, ' until .*| \\\\(.*\\\\)$', '') AS reason, count() AS decisions, uniqExact(ip) AS ips, max(created_at) AS last FROM nsm.response_actions WHERE mode = '${mode}' AND action = 'reject' AND $__timeFilter(created_at) GROUP BY reason ORDER BY decisions DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Why the policy refused to block: a guard rail working, or a trigger that needs tuning",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Decision log",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT created_at AS time, action, ip, trigger, rule, reason, expires_at, actor FROM nsm.response_actions WHERE mode = '${mode}' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Every decision (append-only audit trail, nsm.response_actions)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Time to block per IP",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT a.ip AS ip, a.trigger AS trigger, a.evidence_at AS evidence_at, a.created_at AS decided_at, min(p.applied_at) AS applied_at, round(dateDiff('millisecond', a.evidence_at, min(p.applied_at)) / 1000, 1) AS evidence_to_block_s, round(dateDiff('millisecond', a.created_at, min(p.applied_at)) / 1000, 1) AS decision_to_block_s FROM nsm.response_actions AS a INNER JOIN (SELECT applied_at, arrayJoin(added) AS range FROM nsm.response_applies WHERE mode = '${mode}' AND result != 'error') AS p ON p.range = concat(a.ip, '/32') WHERE a.mode = '${mode}' AND a.action = 'block' AND p.applied_at >= a.created_at AND $__timeFilter(a.created_at) GROUP BY a.ip, a.trigger, a.evidence_at, a.created_at ORDER BY decided_at DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "evidence_at: first matching event in ClickHouse; applied_at: reconciler confirmed the rule (enforce) or recorded the would-be list (dry-run)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Firewall changes",
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT applied_at, result, length(ranges) AS listed, arrayStringConcat(added, ' ') AS added, arrayStringConcat(removed, ' ') AS removed, duration_ms, error FROM nsm.response_applies WHERE mode = '${mode}' AND $__timeFilter(applied_at) ORDER BY applied_at DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "What the reconciler pushed to the nsm-blocklist VPC firewall rule (nsm.response_applies)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}

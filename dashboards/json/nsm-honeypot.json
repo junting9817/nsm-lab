@@ -1,0 +1,781 @@
+{
+ "uid": "nsm-honeypot",
+ "title": "NSM \u2014 Honeypot",
+ "description": "Phase 5: Cowrie SSH honeypot on an isolated VM \u2014 who attacks, from where, with which credentials and commands.",
+ "tags": [
+  "nsm",
+  "phase5",
+  "honeypot"
+ ],
+ "timezone": "browser",
+ "editable": false,
+ "refresh": "1m",
+ "time": {
+  "from": "now-24h",
+  "to": "now"
+ },
+ "schemaVersion": 41,
+ "templating": {
+  "list": [
+   {
+    "type": "query",
+    "name": "exclude_ip",
+    "label": "Source IP to exclude",
+    "description": "Hides our own validation traffic (testing/honeypot/validate.sh runs from the sensor VM's external IP) Read from nsm.lab_addresses so the address lives in .env, not in this file.",
+    "query": {
+     "refId": "exclude_ip",
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT address FROM nsm.lab_addresses WHERE role = 'sensor'"
+    },
+    "hide": 0,
+    "datasource": {
+     "type": "grafana-clickhouse-datasource",
+     "uid": "nsm-clickhouse"
+    },
+    "refresh": 1,
+    "includeAll": false,
+    "multi": false
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "stat",
+   "title": "Login attempts",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT count() AS attempts FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.login.failed', 'cowrie.login.success') AND src_ip != '${exclude_ip}'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Password login attempts against Cowrie (failed + accepted)",
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Source IPs",
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExact(src_ip) AS sources FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid = 'cowrie.session.connect' AND src_ip != '${exclude_ip}'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Distinct addresses that opened a session",
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Accepted logins",
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT count() AS accepted FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid = 'cowrie.login.success' AND src_ip != '${exclude_ip}'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Logins Cowrie's user database accepted (root with most passwords): the attacker then sees a fake shell",
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Commands run",
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT count() AS commands FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid = 'cowrie.command.input' AND src_ip != '${exclude_ip}'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Commands typed or sent after an accepted login",
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Countries",
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExact(src_country_code) AS countries FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid = 'cowrie.session.connect' AND src_country_code != '' AND src_ip != '${exclude_ip}'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Distinct source countries (DB-IP Lite at ingest time)",
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Newest event age",
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT dateDiff('second', max(timestamp), now64()) AS age FROM nsm.cowrie_events"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "description": "Seconds since the newest honeypot event loaded. Events arrive in batches: ~60 s on the honeypot + up to 60 s pull interval",
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "Login attempts over time",
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 0,
+     "queryType": "timeseries",
+     "rawSql": "SELECT $__timeInterval(timestamp) AS time, if(eventid = 'cowrie.login.success', 'accepted', 'failed') AS result, count() AS attempts FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.login.failed', 'cowrie.login.success') AND src_ip != '${exclude_ip}' GROUP BY time, result ORDER BY time"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "description": "Failed vs accepted password attempts",
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "type": "table",
+   "title": "Top countries",
+   "gridPos": {
+    "x": 12,
+    "y": 4,
+    "w": 6,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT if(src_country = '', '(unknown)', src_country) AS country, uniqExact(src_ip) AS sources, countIf(eventid IN ('cowrie.login.failed', 'cowrie.login.success')) AS attempts FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND src_ip != '${exclude_ip}' GROUP BY country ORDER BY sources DESC, attempts DESC LIMIT 15"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Countries by distinct source IPs (DB-IP Lite, CC BY 4.0)",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 9,
+   "type": "table",
+   "title": "Top ASNs",
+   "gridPos": {
+    "x": 18,
+    "y": 4,
+    "w": 6,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT if(src_asn = 0, '(unknown)', concat('AS', toString(src_asn))) AS asn, any(src_as_org) AS organization, uniqExact(src_ip) AS sources, countIf(eventid IN ('cowrie.login.failed', 'cowrie.login.success')) AS attempts FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND src_ip != '${exclude_ip}' GROUP BY asn ORDER BY sources DESC, attempts DESC LIMIT 15"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Autonomous systems by distinct source IPs. Hosting providers dominate: most scanners run on rented servers",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 10,
+   "type": "table",
+   "title": "Top usernames",
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 6,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT username, count() AS attempts, uniqExact(src_ip) AS sources FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.login.failed', 'cowrie.login.success') AND src_ip != '${exclude_ip}' GROUP BY username ORDER BY attempts DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Usernames tried",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 11,
+   "type": "table",
+   "title": "Top passwords",
+   "gridPos": {
+    "x": 6,
+    "y": 12,
+    "w": 6,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT password, count() AS attempts, uniqExact(src_ip) AS sources FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.login.failed', 'cowrie.login.success') AND src_ip != '${exclude_ip}' GROUP BY password ORDER BY attempts DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Passwords tried. Attackers' guesses, not our credentials",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 12,
+   "type": "table",
+   "title": "Top username:password pairs",
+   "gridPos": {
+    "x": 12,
+    "y": 12,
+    "w": 12,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT username, password, count() AS attempts, uniqExact(src_ip) AS sources, countIf(eventid = 'cowrie.login.success') AS accepted FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.login.failed', 'cowrie.login.success') AND src_ip != '${exclude_ip}' GROUP BY username, password ORDER BY attempts DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Credential pairs; the same pair from many sources points to a shared wordlist or botnet",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 13,
+   "type": "table",
+   "title": "Top commands",
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 12,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT input AS command, count() AS runs, uniqExact(src_ip) AS sources FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid = 'cowrie.command.input' AND src_ip != '${exclude_ip}' GROUP BY command ORDER BY runs DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Commands after an accepted login. Downloads never leave the honeypot: its VPC denies all egress except Google APIs",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 14,
+   "type": "table",
+   "title": "SSH clients (version + HASSH)",
+   "gridPos": {
+    "x": 12,
+    "y": 21,
+    "w": 12,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT version AS client_version, fingerprint AS hassh, count() AS sessions, uniqExact(source) AS sources FROM (SELECT session, any(src_ip) AS source, anyIf(client_version, client_version != '') AS version, anyIf(hassh, hassh != '') AS fingerprint FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.client.kex', 'cowrie.client.version') AND src_ip != '${exclude_ip}' GROUP BY session) WHERE fingerprint != '' GROUP BY version, fingerprint ORDER BY sessions DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "HASSH fingerprints the client's SSH key exchange offer; the same HASSH across many IPs is the same tool",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 15,
+   "type": "table",
+   "title": "Source IPs (with sensor visits)",
+   "gridPos": {
+    "x": 0,
+    "y": 30,
+    "w": 24,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT h.src_ip AS source, any(h.src_country_code) AS cc, any(h.src_as_org) AS organization, countIf(h.eventid IN ('cowrie.login.failed', 'cowrie.login.success')) AS login_attempts, countIf(h.eventid = 'cowrie.login.success') AS accepted, countIf(h.eventid = 'cowrie.command.input') AS commands, min(h.timestamp) AS first_seen, max(h.timestamp) AS last_seen, any(z.connections) AS sensor_connections FROM nsm.cowrie_events AS h LEFT JOIN (SELECT id_orig_h AS ip, count() AS connections FROM nsm.zeek_conn WHERE $__timeFilter(ts) AND NOT local_orig GROUP BY ip) AS z ON h.src_ip = z.ip WHERE $__timeFilter(h.timestamp) AND h.src_ip != '${exclude_ip}' GROUP BY h.src_ip ORDER BY login_attempts DESC LIMIT 50"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "sensor_connections = inbound connections from the same IP to the sensor VM (Zeek) in the same range: attackers that hit both, on two unrelated networks",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 16,
+   "type": "table",
+   "title": "Recent logins and commands",
+   "gridPos": {
+    "x": 0,
+    "y": 39,
+    "w": 24,
+    "h": 9
+   },
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT timestamp AS time, src_ip, src_country_code AS cc, replaceOne(eventid, 'cowrie.', '') AS event, username, password, input AS command, session FROM nsm.cowrie_events WHERE $__timeFilter(timestamp) AND eventid IN ('cowrie.login.failed', 'cowrie.login.success', 'cowrie.command.input') AND src_ip != '${exclude_ip}' ORDER BY timestamp DESC LIMIT 100"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "description": "Latest credential attempts and commands; session links events of one connection",
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 17,
+   "type": "text",
+   "title": "",
+   "gridPos": {
+    "x": 0,
+    "y": 48,
+    "w": 24,
+    "h": 2
+   },
+   "options": {
+    "mode": "markdown",
+    "content": "IP geolocation and ASN data: [DB-IP Lite](https://db-ip.com) (CC BY 4.0), looked up when events are loaded. Honeypot: Cowrie on a separate VM and VPC; logs arrive one-way through a Cloud Storage bucket."
+   }
+  }
+ ]
+}

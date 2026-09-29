@@ -1,0 +1,54 @@
+# Honeypot VM stack: Cowrie + Vector. Delivered as instance metadata by infra/terraform/honeypot.tf and started by honeypot/startup.sh.
+# Memory: e2-micro has 1 GiB; container limits total 576 MiB (≤ 70%). Images are pinned by digest.
+name: nsm-honeypot
+
+services:
+  cowrie:
+    image: cowrie/cowrie:3.0.14@sha256:f6ea2e847a1837794cd570322a25a9da819824c70a718600fa6de4c1eba66626
+    container_name: cowrie
+    restart: unless-stopped
+    # Internet 22/tcp → Cowrie 2222. The real sshd listens on 22222 (IAP only), set by startup.sh.
+    ports:
+      - "22:2222"
+    volumes:
+      - /opt/nsm-honeypot/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - /var/lib/nsm-honeypot/cowrie:/cowrie/cowrie-git/var
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  vector:
+    image: timberio/vector:0.58.0-debian@sha256:1c1ea358c617ea0b23003d5af87f7a678b30f8f7096437e680380c47fc13d2d9
+    container_name: vector
+    restart: unless-stopped
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - /opt/nsm-honeypot/vector.yaml:/etc/vector/vector.yaml:ro
+      - /var/lib/nsm-honeypot/cowrie/log/cowrie:/cowrie/log:ro
+      - /var/lib/nsm-honeypot/vector:/var/lib/vector
+    # Egress is only allowed to the private.googleapis.com VIP (199.36.153.8/30), so pin the API hostname to it.
+    # Credentials come from the metadata server, which firewall rules never block.
+    extra_hosts:
+      - "storage.googleapis.com:199.36.153.8"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 192m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

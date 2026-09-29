@@ -1,0 +1,17 @@
+technique_id	tactic	name	why_in_scope
+T1595.001	reconnaissance	Active Scanning: Scanning IP Blocks	Internet-wide sweeps reach every exposed address
+T1595.002	reconnaissance	Active Scanning: Vulnerability Scanning	Web scanners probe the exposed dashboard
+T1190	initial-access	Exploit Public-Facing Application	Exploit kits (Apache traversal, PHP-CGI, React2Shell) hit port 80 daily
+T1110.001	credential-access	Brute Force: Password Guessing	SSH password guessing against 22/tcp and the honeypot
+T1059.004	execution	Command and Scripting Interpreter: Unix Shell	Post-exploitation shell commands in HTTP payloads and honeypot sessions
+T1105	command-and-control	Ingress Tool Transfer	Attackers upload or download tooling after access (seen on the honeypot)
+T1046	discovery	Network Service Discovery	Port scans from inside the network after a compromise
+T1071.001	command-and-control	Application Layer Protocol: Web Protocols	Beaconing over HTTP(S) from a compromised host
+T1071.004	command-and-control	Application Layer Protocol: DNS	DNS tunneling and DNS-based C2
+T1573.002	command-and-control	Encrypted Channel: Asymmetric Cryptography	C2 over TLS, visible through rare fingerprints and certificates
+T1568.002	command-and-control	Dynamic Resolution: Domain Generation Algorithms	Malware resolving generated domains (NXDOMAIN bursts)
+T1571	command-and-control	Non-Standard Port	Standard protocols moved to unusual ports
+T1587.003	resource-development	Develop Capabilities: Digital Certificates	Self-signed or mismatched certificates on attacker infrastructure
+T1048	exfiltration	Exfiltration Over Alternative Protocol	Data sent over DNS or other non-C2 channels
+T1041	exfiltration	Exfiltration Over C2 Channel	Bulk uploads over an established channel
+T1496	impact	Resource Hijacking	RedTail-style botnets install cryptominers after exploiting servers like this one

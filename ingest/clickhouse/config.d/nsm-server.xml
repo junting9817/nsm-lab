@@ -1,0 +1,93 @@
+<!--
+  Small-server settings: 2 GiB container memory limit, 2 vCPU (docs/architecture.md section 3)
+-->
+<clickhouse>
+    <!-- Server-wide memory cap = 80% of the container limit (1.6 GiB).
+         ClickHouse rejects queries itself before the cgroup OOM killer steps in. -->
+    <max_server_memory_usage>1717986918</max_server_memory_usage>
+
+    <!-- Smaller caches: the defaults assume a large server -->
+    <mark_cache_size>268435456</mark_cache_size>
+    <index_mark_cache_size>67108864</index_mark_cache_size>
+    <uncompressed_cache_size>0</uncompressed_cache_size>
+    <index_uncompressed_cache_size>0</index_uncompressed_cache_size>
+
+    <!-- Fewer merge threads (2 vCPU). The merge_tree values below must stay under background_pool_size × 2 or the server will not start -->
+    <background_pool_size>4</background_pool_size>
+    <merge_tree>
+        <merge_max_block_size>1024</merge_max_block_size>
+        <max_bytes_to_merge_at_max_space_in_pool>1073741824</max_bytes_to_merge_at_max_space_in_pool>
+        <number_of_free_entries_in_pool_to_execute_mutation>2</number_of_free_entries_in_pool_to_execute_mutation>
+        <number_of_free_entries_in_pool_to_lower_max_size_of_merge>2</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
+        <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>2</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
+    </merge_tree>
+
+    <!-- Smaller thread pools. The defaults assume many cores, so even on 2 vCPU 664 threads started
+         (512 in background_schedule_pool alone), and per-thread stacks and allocator caches piled up as 1.2 GiB of RSS
+         the server did not track (measured 2026-09-13: MemoryTracking 94 MiB, container anon 1,241 MiB — docs/architecture.md section 3) -->
+    <background_schedule_pool_size>16</background_schedule_pool_size>
+    <background_buffer_flush_schedule_pool_size>2</background_buffer_flush_schedule_pool_size>
+    <background_message_broker_schedule_pool_size>1</background_message_broker_schedule_pool_size>
+    <background_distributed_schedule_pool_size>1</background_distributed_schedule_pool_size>
+    <background_fetches_pool_size>1</background_fetches_pool_size>
+    <background_move_pool_size>1</background_move_pool_size>
+    <background_common_pool_size>2</background_common_pool_size>
+    <max_thread_pool_size>1000</max_thread_pool_size>
+    <max_thread_pool_free_size>32</max_thread_pool_free_size>
+    <max_io_thread_pool_size>16</max_io_thread_pool_size>
+    <max_active_parts_loading_thread_pool_size>4</max_active_parts_loading_thread_pool_size>
+    <max_outdated_parts_loading_thread_pool_size>4</max_outdated_parts_loading_thread_pool_size>
+    <max_parts_cleaning_thread_pool_size>4</max_parts_cleaning_thread_pool_size>
+    <max_backups_io_thread_pool_size>8</max_backups_io_thread_pool_size>
+    <max_fetch_partition_thread_pool_size>4</max_fetch_partition_thread_pool_size>
+    <max_format_parsing_thread_pool_size>8</max_format_parsing_thread_pool_size>
+    <max_prefixes_deserialization_thread_pool_size>8</max_prefixes_deserialization_thread_pool_size>
+    <load_marks_threadpool_pool_size>8</load_marks_threadpool_pool_size>
+    <prefetch_threadpool_pool_size>8</prefetch_threadpool_pool_size>
+    <threadpool_local_fs_reader_pool_size>16</threadpool_local_fs_reader_pool_size>
+    <threadpool_remote_fs_reader_pool_size>8</threadpool_remote_fs_reader_pool_size>
+    <threadpool_writer_pool_size>8</threadpool_writer_pool_size>
+    <parts_killer_pool_size>4</parts_killer_pool_size>
+    <snapshot_cleaner_pool_size>4</snapshot_cleaner_pool_size>
+    <drop_distributed_cache_pool_size>1</drop_distributed_cache_pool_size>
+    <iceberg_background_schedule_pool_size>1</iceberg_background_schedule_pool_size>
+    <iceberg_catalog_threadpool_pool_size>1</iceberg_catalog_threadpool_pool_size>
+    <max_build_vector_similarity_index_thread_pool_size>1</max_build_vector_similarity_index_thread_pool_size>
+
+    <!-- Caps for caches of unused features (defaults are in GiB: primary index 5 GiB, vector similarity 5 GiB, ...) -->
+    <primary_index_cache_size>134217728</primary_index_cache_size>
+    <query_condition_cache_size>33554432</query_condition_cache_size>
+    <compiled_expression_cache_size>33554432</compiled_expression_cache_size>
+    <vector_similarity_index_cache_size>16777216</vector_similarity_index_cache_size>
+    <text_index_header_cache_size>16777216</text_index_header_cache_size>
+    <text_index_postings_cache_size>16777216</text_index_postings_cache_size>
+    <text_index_tokens_cache_size>16777216</text_index_tokens_cache_size>
+    <iceberg_metadata_files_cache_size>16777216</iceberg_metadata_files_cache_size>
+    <parquet_metadata_cache_size>16777216</parquet_metadata_cache_size>
+
+    <!-- Unused protocols off -->
+    <mysql_port remove="1"/>
+    <postgresql_port remove="1"/>
+    <interserver_http_port remove="1"/>
+
+    <!-- System log tables: keep the ones used for investigations for 7 days and turn the rest off, so the disk cannot fill -->
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+    <part_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </part_log>
+    <error_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </error_log>
+    <trace_log remove="1"/>
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <text_log remove="1"/>
+    <query_thread_log remove="1"/>
+    <query_views_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <latency_log remove="1"/>
+    <session_log remove="1"/>
+</clickhouse>

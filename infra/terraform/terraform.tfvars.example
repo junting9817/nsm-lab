@@ -1,0 +1,9 @@
+# cp terraform.tfvars.example terraform.tfvars and fill in the values. Never commit terraform.tfvars.
+project_id = "your-project-id"
+
+# Set only when different from the defaults
+# zone          = "asia-northeast3-c"
+# instance_name = "myfirstserver"
+
+# Sources allowed to reach Grafana on 80/tcp. Narrowing to your public IP/32 is recommended (docs/architecture.md D3)
+# dashboard_source_ranges = ["203.0.113.10/32"]

@@ -1,0 +1,7 @@
+# Custom rules written for this lab only. When adding or changing a rule, update docs/detection-catalog.md in the same commit.
+# SID range: 9000000–9999999 (local rules)
+
+# DET-000 pipeline canary — not an attack detection rule.
+# Confirms the path sensor capture → EVE → Vector → ClickHouse → Grafana is alive.
+# Trigger: curl http://<sensor external IP>/nsm-pipeline-canary
+alert http any any -> $HOME_NET any (msg:"NSM PIPELINE CANARY request"; flow:established,to_server; http.uri; content:"/nsm-pipeline-canary"; startswith; classtype:misc-activity; sid:9000000; rev:1; metadata:nsm_id DET-000, created_at 2026_09_13;)

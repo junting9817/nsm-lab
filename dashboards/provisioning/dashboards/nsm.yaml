@@ -1,0 +1,12 @@
+# Imports the JSON files under dashboards/json into the NSM folder. UI edits are blocked; the files are the source of truth.
+apiVersion: 1
+
+providers:
+  - name: nsm
+    folder: NSM
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/dashboards

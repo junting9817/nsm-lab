@@ -1,0 +1,23 @@
+# ClickHouse datasource, connecting with the read-only account grafana_ro (docs/architecture.md D3).
+apiVersion: 1
+
+datasources:
+  - name: ClickHouse
+    uid: nsm-clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      host: clickhouse
+      port: 9000
+      protocol: native
+      secure: false
+      username: grafana_ro
+      defaultDatabase: nsm
+      # The plugin sends this as max_execution_time with every query. Unset, it exceeded grafana_ro's 60 s constraint and every query was rejected.
+      # Must be a string, not a number (plugin CHANGELOG #1559).
+      queryTimeout: "30"
+      dialTimeout: "10"
+    secureJsonData:
+      password: $CH_GRAFANA_PASSWORD

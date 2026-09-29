@@ -1,0 +1,663 @@
+{
+  "uid": "nsm-soc-kpi",
+  "title": "NSM — SOC KPI",
+  "description": "MTTD, MTTR, daily alert volume, false-positive rate, ATT&CK coverage and the health of detections and data.",
+  "tags": [
+    "nsm",
+    "phase7",
+    "kpi"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "5m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "schemaVersion": 41,
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "MTTD (engine, median)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT quantileExact(0.5)(mttd_ms) AS mttd FROM nsm.validation_runs WHERE result = 'PASS' AND started_at > now() - INTERVAL 30 DAY"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Replay start → Suricata alert, median of PASS rows in 30 days (testing/validate.sh, docs/kpi.md)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Alert visible after (median)",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT quantileExact(0.5)(visible_ms) / 1000 AS visible FROM nsm.validation_runs WHERE result = 'PASS' AND started_at > now() - INTERVAL 30 DAY"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "description": "Replay start → queryable in ClickHouse (pipeline included)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "MTTR (evidence → block, median)",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT median(dateDiff('millisecond', a.evidence_at, p.applied_at)) / 1000 AS mttr FROM nsm.response_actions AS a INNER JOIN (SELECT applied_at, arrayJoin(added) AS range FROM nsm.response_applies WHERE mode = 'enforce' AND result = 'ok') AS p ON p.range = concat(a.ip, '/32') WHERE a.mode = 'enforce' AND a.action = 'block' AND a.trigger != 'manual' AND a.evidence_at IS NOT NULL AND p.applied_at >= a.created_at AND a.created_at > now() - INTERVAL 30 DAY AND parseDateTime64BestEffortOrNull(JSONExtractString(a.detail, 'startsAt')) >= a.created_at - INTERVAL 20 MINUTE"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0,
+          "noValue": "no clean sample yet"
+        },
+        "overrides": []
+      },
+      "description": "First evidence → firewall rule confirmed, automatic blocks in 30 days whose Grafana alert started within 20 min of the decision. Blocks decided from a repeat notification of an older alert are not detection latency (docs/kpi.md)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Daily alert volume",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT round(avg(n)) AS per_day FROM (SELECT toDate(timestamp) AS d, count() AS n FROM nsm.suricata_alert WHERE in_iface = 'ens4' AND timestamp > now() - INTERVAL 7 DAY AND toDate(timestamp) < today() GROUP BY d)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Average Suricata alerts per complete day over the last 7 days",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "FP rate (reviewed pairs)",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT countIf(sv.latest_verdict = 'false_positive') / count() AS fp_rate FROM (SELECT subject, argMax(verdict, created_at) AS latest_verdict FROM nsm.verdicts WHERE source = 'suricata' GROUP BY subject) AS sv WHERE sv.subject IN (SELECT DISTINCT concat(toString(alert_signature_id), '|', src_ip) FROM nsm.suricata_alert WHERE in_iface = 'ens4')"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "description": "False-positive signature/source pairs ÷ reviewed pairs (the unit of triage). Counted per alert, the noise already suppressed by tuning dominates — see the table below. Verdicts cover reviewed severity-1 pairs and tuned noise, not a random sample",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "ATT&CK coverage",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT countIf(status = 'validated') / count() AS coverage FROM nsm.attack_coverage WHERE in_target"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "description": "Target techniques with a validated detection (detections/attack-targets.tsv; detections/attack-layer.py)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Daily alert volume",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toStartOfDay(timestamp) AS time, concat('severity ', toString(alert_severity)) AS level, count() AS alerts FROM nsm.suricata_alert WHERE $__timeFilter(timestamp) AND in_iface = 'ens4' GROUP BY time, level ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "description": "Suricata alerts per day by severity",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Daily response decisions",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toStartOfDay(created_at) AS time, concat(action, ' · ', mode) AS decision, count() AS decisions FROM nsm.response_actions WHERE $__timeFilter(created_at) AND mode != 'test' GROUP BY time, decision ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "description": "Blocks, observations, rejections and releases per day (dry-run until 2026-09-15 04:14 UTC)",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "False-positive rate by source",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT 'Suricata (by reviewed pair)' AS source, countIf(sv.latest_verdict = 'true_positive') AS true_positives, countIf(sv.latest_verdict = 'false_positive') AS false_positives, round(100 * countIf(sv.latest_verdict = 'false_positive') / count(), 1) AS fp_rate_pct FROM (SELECT subject, argMax(verdict, created_at) AS latest_verdict FROM nsm.verdicts WHERE source = 'suricata' GROUP BY subject) AS sv WHERE sv.subject IN (SELECT DISTINCT concat(toString(alert_signature_id), '|', src_ip) FROM nsm.suricata_alert WHERE in_iface = 'ens4') UNION ALL SELECT 'Suricata (by alert, incl. tuned noise)' AS source, countIf(sv.latest_verdict = 'true_positive') AS true_positives, countIf(sv.latest_verdict = 'false_positive') AS false_positives, round(100 * countIf(sv.latest_verdict = 'false_positive') / count(), 1) AS fp_rate_pct FROM nsm.suricata_alert AS a INNER JOIN (SELECT subject, argMax(verdict, created_at) AS latest_verdict FROM nsm.verdicts WHERE source = 'suricata' GROUP BY subject) AS sv ON sv.subject = concat(toString(a.alert_signature_id), '|', a.src_ip) WHERE a.in_iface = 'ens4' UNION ALL SELECT 'Behavior detections (by finding)', countIf(dv.latest_verdict = 'true_positive'), countIf(dv.latest_verdict = 'false_positive'), round(100 * countIf(dv.latest_verdict = 'false_positive') / count(), 1) FROM (SELECT DISTINCT hit_key FROM nsm.detection_hits) AS f INNER JOIN (SELECT subject, argMax(verdict, created_at) AS latest_verdict FROM nsm.verdicts WHERE source = 'detection' GROUP BY subject) AS dv ON dv.subject = f.hit_key"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Behavior detections on a server with no compromise have only produced benign findings so far — each tuned in docs/tuning-log.md",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Detection health (latest run)",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT detection_id AS detection, argMax(result, run_at) AS last_result, argMax(hits, run_at) AS last_hits, argMax(duration_ms, run_at) AS last_duration_ms, max(run_at) AS last_run, dateDiff('minute', max(run_at), now64(3)) AS minutes_ago, countIf(result = 'error' AND run_at > now() - INTERVAL 1 DAY) AS errors_24h FROM nsm.detection_runs WHERE NOT backfill GROUP BY detection ORDER BY detection"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "A detection that stops running shows up here before anyone misses its findings (hourly at :07)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "ATT&CK coverage",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 12
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT technique_id AS technique, name AS technique_name, tactic, status AS coverage, arrayStringConcat(detections, ', ') AS validated_by, arrayStringConcat(observed_by, ', ') AS observed FROM nsm.attack_coverage WHERE in_target ORDER BY indexOf(['gap', 'observed', 'validated'], coverage), technique"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Layer for ATT&CK Navigator: detections/attack-map.json. gap = in scope but nothing detects it yet",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Validation runs (PCAP harness)",
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 12
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT started_at, case_name AS test_case, attack_technique AS technique, result AS outcome, mttd_ms, visible_ms, rules_loaded FROM nsm.validation_runs ORDER BY started_at DESC LIMIT 40"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Each row is one replayed attack through the production pipeline",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Data freshness",
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT source, latest, dateDiff('second', latest, now64(3)) AS lag_s FROM ( SELECT 'zeek_conn' AS source, max(ts) AS latest FROM nsm.zeek_conn UNION ALL SELECT 'suricata_alert', max(timestamp) FROM nsm.suricata_alert WHERE in_iface = 'ens4' UNION ALL SELECT 'suricata_stats', max(timestamp) FROM nsm.suricata_stats UNION ALL SELECT 'cowrie_events (honeypot)', max(timestamp) FROM nsm.cowrie_events UNION ALL SELECT 'detection_runs', max(run_at) FROM nsm.detection_runs WHERE NOT backfill UNION ALL SELECT 'vector_internal_metrics', max(timestamp) FROM nsm.vector_internal_metrics ) ORDER BY lag_s DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Newest row per source",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}

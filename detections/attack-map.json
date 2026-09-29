@@ -1,0 +1,355 @@
+{
+  "name": "NSM Lab \u2014 network detection coverage",
+  "versions": {
+    "layer": "4.5",
+    "navigator": "5.1.0"
+  },
+  "domain": "enterprise-attack",
+  "description": "Generated 2026-09-15 04:58 UTC by detections/attack-layer.py from docs/detection-catalog.md. Targets: 16; validated 13 (81%); observed only 2; gaps 1.",
+  "filters": {
+    "platforms": [
+      "Linux",
+      "Network"
+    ]
+  },
+  "sorting": 3,
+  "layout": {
+    "layout": "side",
+    "showID": true,
+    "showName": true
+  },
+  "hideDisabled": false,
+  "techniques": [
+    {
+      "techniqueID": "T1041",
+      "score": 2,
+      "comment": "validated by DET-107",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-107"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1046",
+      "score": 2,
+      "comment": "validated by DET-109",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-109"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1048",
+      "score": 2,
+      "comment": "validated by DET-105, DET-107",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-105"
+        },
+        {
+          "name": "detection",
+          "value": "DET-107"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1059.004",
+      "score": 2,
+      "comment": "validated by DET-001; observed: honeypot (16 sources)",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-001"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1071",
+      "score": 2,
+      "comment": "validated by DET-102; outside the target list",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-102"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1071.001",
+      "score": 2,
+      "comment": "validated by DET-101, DET-103",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-101"
+        },
+        {
+          "name": "detection",
+          "value": "DET-103"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1071.004",
+      "score": 2,
+      "comment": "validated by DET-001, DET-105",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-001"
+        },
+        {
+          "name": "detection",
+          "value": "DET-105"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1083",
+      "score": 1,
+      "comment": "observed: suricata (4 sources); outside the target list",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "observed"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1105",
+      "score": 1,
+      "comment": "observed: honeypot (3 sources)",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "observed"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1110.001",
+      "score": 1,
+      "comment": "observed: honeypot (25 sources)",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "observed"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1190",
+      "score": 2,
+      "comment": "validated by DET-001; observed: suricata (7 sources)",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-001"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1496",
+      "score": 0,
+      "comment": "in target list, no detection yet",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "gap"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1568.002",
+      "score": 2,
+      "comment": "validated by DET-106",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-106"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1571",
+      "score": 2,
+      "comment": "validated by DET-108",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-108"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1573.002",
+      "score": 2,
+      "comment": "validated by DET-103, DET-104",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-103"
+        },
+        {
+          "name": "detection",
+          "value": "DET-104"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1587.003",
+      "score": 2,
+      "comment": "validated by DET-104",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-104"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1595.001",
+      "score": 2,
+      "comment": "validated by DET-109",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-109"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1595.002",
+      "score": 2,
+      "comment": "validated by DET-001",
+      "enabled": true,
+      "showSubtechniques": false,
+      "metadata": [
+        {
+          "name": "status",
+          "value": "validated"
+        },
+        {
+          "name": "detection",
+          "value": "DET-001"
+        }
+      ]
+    }
+  ],
+  "gradient": {
+    "colors": [
+      "#e8716b",
+      "#f5d76e",
+      "#66b86a"
+    ],
+    "minValue": 0,
+    "maxValue": 2
+  },
+  "legendItems": [
+    {
+      "label": "Validated detection",
+      "color": "#66b86a"
+    },
+    {
+      "label": "Observed in production only",
+      "color": "#f5d76e"
+    },
+    {
+      "label": "Target without detection (gap)",
+      "color": "#e8716b"
+    }
+  ],
+  "showTacticRowBackground": false,
+  "selectTechniquesAcrossTactics": true
+}

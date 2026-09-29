@@ -1,0 +1,672 @@
+{
+ "uid": "nsm-attack-map",
+ "title": "NSM \u2014 Attack map and path",
+ "description": "Where attacks come from and how far they get: the honeypot's own attackers, everything that reaches the sensor, and the route one intrusion takes from first packet to dropped file.",
+ "tags": [
+  "nsm",
+  "honeypot",
+  "map"
+ ],
+ "timezone": "utc",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "",
+ "time": {
+  "from": "now-30d",
+  "to": "now"
+ },
+ "editable": false,
+ "panels": [
+  {
+   "type": "text",
+   "title": "",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 4
+   },
+   "options": {
+    "mode": "markdown",
+    "content": "## Where attacks come from, and how far they get\nLive from the SSH honeypot on its own VM in its own VPC. The map places every attacking address by country; the graph below traces one intrusion's whole route \u2014 **arrived from \u2192 which program \u2192 what it typed \u2192 what it left behind.**\n\n*My own test traffic is excluded by the queries. A country tells you where packets entered, not who sent them: the second-largest operator here runs from four countries at once.*"
+   }
+  },
+  {
+   "type": "geomap",
+   "title": "Where the attacks come from",
+   "description": "Every address that reached the SSH honeypot, placed by the country its geolocation record claims. Circle size is sessions. Country here means what the database says, not where the operator sits \u2014 the same operator appears from several countries at once.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 16,
+    "h": 14
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "\nSELECT src_country_code AS country_code, any(src_country) AS country,\n       uniqExact(session) AS sessions, uniqExact(src_ip) AS addresses, count() AS events\nFROM nsm.cowrie_events\nWHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp) AND src_country_code != ''\nGROUP BY country_code ORDER BY sessions DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#275446",
+        "value": null
+       },
+       {
+        "color": "#d9822b",
+        "value": 500
+       },
+       {
+        "color": "#b23a20",
+        "value": 3000
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "view": {
+     "id": "zero",
+     "lat": 25,
+     "lon": 10,
+     "zoom": 1.4
+    },
+    "basemap": {
+     "type": "osm-standard",
+     "name": "Basemap",
+     "config": {}
+    },
+    "controls": {
+     "showZoom": true,
+     "mouseWheelZoom": false,
+     "showAttribution": true,
+     "showScale": false,
+     "showMeasure": false,
+     "showDebug": false
+    },
+    "tooltip": {
+     "mode": "details"
+    },
+    "layers": [
+     {
+      "type": "markers",
+      "name": "Attacks by country",
+      "location": {
+       "mode": "lookup",
+       "lookup": "country_code",
+       "gazetteer": "public/gazetteer/countries.json"
+      },
+      "config": {
+       "style": {
+        "size": {
+         "field": "sessions",
+         "fixed": 5,
+         "min": 4,
+         "max": 26
+        },
+        "color": {
+         "field": "sessions",
+         "fixed": "#b23a20"
+        },
+        "opacity": 0.55,
+        "symbol": {
+         "mode": "fixed",
+         "fixed": "img/icons/marker/circle.svg"
+        },
+        "textConfig": {
+         "fontSize": 12,
+         "offsetX": 0,
+         "offsetY": 0,
+         "textAlign": "center",
+         "textBaseline": "middle"
+        }
+       },
+       "showLegend": true
+      },
+      "tooltip": true
+     }
+    ]
+   }
+  },
+  {
+   "type": "table",
+   "title": "Top origins",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 4,
+    "w": 8,
+    "h": 14
+   },
+   "description": "The same data as the map, in the form that admits how little it means: one operator here spans four countries.",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "\nSELECT src_country_code AS code, any(src_country) AS country, uniqExact(src_ip) AS addresses,\n       uniqExact(session) AS sessions\nFROM nsm.cowrie_events WHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp) AND src_country_code != ''\nGROUP BY code ORDER BY sessions DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   }
+  },
+  {
+   "type": "table",
+   "title": "The path an attack takes",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "description": "One row per program, identified by its SSH client fingerprint: where its sessions arrived from, what it typed after logging in, and what it left behind. One program commonly spans several countries \u2014 which is why the country column above describes packet entry points rather than actors.",
+   "gridPos": {
+    "x": 0,
+    "y": 18,
+    "w": 24,
+    "h": 11
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "\nWITH sess AS (\n  SELECT session, anyIf(hassh, hassh != '') AS hassh, any(src_country_code) AS cc\n  FROM nsm.cowrie_events\n  WHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp)\n    AND src_country_code != ''\n  GROUP BY session HAVING hassh != ''),\n     ops AS (SELECT hassh, count() AS n FROM sess GROUP BY hassh ORDER BY n DESC LIMIT 8)\nSELECT substring(s.hassh, 1, 8)                                   AS program,\n       arrayStringConcat(arraySort(groupUniqArray(s.cc)), ' ')    AS arrives_from,\n       uniqExact(s.session)                                       AS sessions,\n       uniqExact(e.src_ip)                                        AS addresses,\n       substring(anyIf(e.input, e.eventid = 'cowrie.command.input' AND e.input != ''), 1, 46) AS typed,\n       arrayStringConcat(arrayDistinct(groupArrayIf(\n           extract(e.message, 'file \"([^\"]+)\"'),\n           e.eventid LIKE 'cowrie.session.file%' AND e.shasum != '')), ', ')                  AS left_behind\nFROM nsm.cowrie_events AS e\nINNER JOIN sess AS s ON e.session = s.session\nWHERE s.hassh IN (SELECT hassh FROM ops)\nGROUP BY program ORDER BY sessions DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "arrives_from"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 250
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "typed"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 330
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   }
+  },
+  {
+   "type": "geomap",
+   "title": "Everything that reaches the sensor",
+   "description": "Not just the honeypot: every connection Zeek logs where the far end is outside this lab, plus every Suricata alert source. Zeek decides which end is remote from its own local_nets, so the lab's own addresses cannot appear here.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 33,
+    "w": 16,
+    "h": 14
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "\nSELECT remote_country_code AS country_code, any(remote_country) AS country,\n       uniqExact(remote_ip) AS addresses, count() AS connections\nFROM nsm.zeek_conn\nWHERE $__timeFilter(ts) AND remote_country_code != '' AND direction = 'inbound'\nGROUP BY country_code ORDER BY connections DESC"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#275446",
+        "value": null
+       },
+       {
+        "color": "#d9822b",
+        "value": 200
+       },
+       {
+        "color": "#b23a20",
+        "value": 1000
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "view": {
+     "id": "zero",
+     "lat": 25,
+     "lon": 10,
+     "zoom": 1.4
+    },
+    "basemap": {
+     "type": "osm-standard",
+     "name": "Basemap",
+     "config": {}
+    },
+    "controls": {
+     "showZoom": true,
+     "mouseWheelZoom": false,
+     "showAttribution": true,
+     "showScale": false,
+     "showMeasure": false,
+     "showDebug": false
+    },
+    "tooltip": {
+     "mode": "details"
+    },
+    "layers": [
+     {
+      "type": "markers",
+      "name": "Inbound connections",
+      "location": {
+       "mode": "lookup",
+       "lookup": "country_code",
+       "gazetteer": "public/gazetteer/countries.json"
+      },
+      "config": {
+       "style": {
+        "size": {
+         "field": "connections",
+         "fixed": 5,
+         "min": 4,
+         "max": 26
+        },
+        "color": {
+         "field": "connections",
+         "fixed": "#275446"
+        },
+        "opacity": 0.55,
+        "symbol": {
+         "mode": "fixed",
+         "fixed": "img/icons/marker/circle.svg"
+        },
+        "textConfig": {
+         "fontSize": 12,
+         "offsetX": 0,
+         "offsetY": 0,
+         "textAlign": "center",
+         "textBaseline": "middle"
+        }
+       },
+       "showLegend": true
+      },
+      "tooltip": true
+     }
+    ]
+   }
+  },
+  {
+   "type": "table",
+   "title": "Alerting networks",
+   "description": "Suricata alert sources by operator. Private sources (docker networks, the metadata server) return nothing from the geolocation database and are left blank rather than guessed at.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 33,
+    "w": 8,
+    "h": 14
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "\nSELECT src_country_code AS cc, substring(any(src_as_org), 1, 30) AS network,\n       uniqExact(src_ip) AS addresses, count() AS alerts\nFROM nsm.suricata_alert\nWHERE $__timeFilter(timestamp) AND src_country_code != ''\nGROUP BY cc, src_asn ORDER BY alerts DESC LIMIT 20"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Countries seen",
+   "description": "",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 48,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExactIf(src_country_code, src_country_code != '') AS v FROM nsm.cowrie_events WHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Attacking addresses",
+   "description": "",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 48,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExact(src_ip) AS v FROM nsm.cowrie_events WHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Sessions",
+   "description": "",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 48,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExact(session) AS v FROM nsm.cowrie_events WHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Programs behind them",
+   "description": "Distinct SSH client fingerprints \u2014 far fewer than the addresses.",
+   "datasource": {
+    "type": "grafana-clickhouse-datasource",
+    "uid": "nsm-clickhouse"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 48,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-clickhouse-datasource",
+      "uid": "nsm-clickhouse"
+     },
+     "editorType": "sql",
+     "format": 1,
+     "queryType": "table",
+     "rawSql": "SELECT uniqExactIf(hassh, hassh != '') AS v FROM nsm.cowrie_events WHERE src_ip NOT IN (SELECT address FROM nsm.lab_addresses) AND $__timeFilter(timestamp)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "auto"
+   }
+  }
+ ]
+}

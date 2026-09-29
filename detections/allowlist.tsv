@@ -1,0 +1,15 @@
+id	detection_id	match_type	value	reason	expires_at	enabled
+TUNE-002	DET-101	sni	grafana.com	Grafana server update and plugin checks every 10 min	2026-12-13 00:00:00	true
+TUNE-003	DET-101	sni	deb.debian.org	Google OS Config agent package inventory: apt HTTPS fetch plus apt-get --just-print full-upgrade every 10 min	2026-12-13 00:00:00	true
+TUNE-004	DET-101	sni	downloads.claude.ai	Claude Code update checks every 30 min	2026-12-13 00:00:00	true
+TUNE-005	DET-102	sni	api.anthropic.com	Claude Code keeps HTTP/2 connections to the API open	2026-12-13 00:00:00	true
+TUNE-006	DET-102	sni	asia-northeast3-c-osconfig.googleapis.com	GCE OS Config agent long polling	2026-12-13 00:00:00	true
+TUNE-007	DET-102	sni	asia-northeast3-c-agentcommunication.googleapis.com	GCE guest agent long polling	2026-12-13 00:00:00	true
+TUNE-008	DET-102	sni	monitoring.googleapis.com	Ops Agent metric export streams, rotated hourly	2026-12-13 00:00:00	true
+TUNE-009	DET-107	sni	monitoring.googleapis.com	Ops Agent metric uploads are upload-only by design	2026-12-13 00:00:00	true
+TUNE-010	DET-107	sni	api.anthropic.com	Claude Code sends large prompts and receives small streamed responses	2026-12-13 00:00:00	true
+TUNE-013	DET-102	sni	logging.googleapis.com	Ops Agent log export streams, rotated hourly (same pattern as TUNE-008)	2026-12-13 00:00:00	true
+TUNE-014	DET-103	sni	rules.emergingthreats.net	Daily ET Open download by suricata-update (nsm-rules-update.timer)	2026-12-13 00:00:00	true
+TUNE-015	DET-101	dst_cidr	ff00::/8	IPv6 multicast (router solicitation, MLD) is link-local control traffic, never C2	2026-12-13 00:00:00	true
+TUNE-016	DET-101	sni	http-intake.logs.us5.datadoghq.com	Claude Code (the admin session on this VM) sends its telemetry logs every 30 min; owner confirmed with ss -tnp (process claude)	2026-12-13 00:00:00	true
+TUNE-017	DET-103	sni	http-intake.logs.us5.datadoghq.com	Same Claude Code telemetry client as TUNE-016 (its own JA4)	2026-12-13 00:00:00	true

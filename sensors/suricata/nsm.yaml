@@ -1,0 +1,82 @@
+%YAML 1.1
+---
+# Suricata sensor config overrides.
+# Applied on top of the image's default suricata.yaml with `--include` (suricata command in docker-compose.yml).
+# Merge rule (confirmed with Suricata 8.0.6 --dump-config): top-level nodes in the include file replace the defaults "entirely".
+#   e.g. writing only detect: {profile: low} shrinks the 18 default detect.* keys to 1.
+# So this file only holds list nodes that are replaced as a whole (af-packet, outputs, rule-files).
+# Single values inside maps (HOME_NET, detect.profile, memcaps, ...) are set with --set in docker-compose.yml.
+#
+# Division of labor: Suricata only produces "signature alerts". Zeek owns connection/DNS/TLS/HTTP metadata, so
+# EVE carries no flow/dns/tls/http events. Alerts are linked to Zeek conn through community_id instead.
+
+af-packet:
+  - interface: ens4
+    threads: 1
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    tpacket-v3: yes
+    ring-size: 2048
+    # With defrag on, holding the largest reassembled IP packet (65561 bytes) needs more than 65536
+    block-size: 131072
+    # virtio NIC checksum offload leaves outbound checksums empty at capture time → do not validate
+    checksum-checks: no
+
+  # Dummy interface used only by the PCAP validation harness (testing/pcap/replay.sh). It goes through the production rules and outputs,
+  # so replay results are the production pipeline's detection results. Alerts are told apart by in_iface.
+  - interface: nsm-replay0
+    threads: 1
+    cluster-id: 98
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    tpacket-v3: yes
+    ring-size: 2048
+    block-size: 131072
+    checksum-checks: no
+
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      # Same seed 0 as Zeek (community-id-logging) → the same flow gets the same ID
+      community-id: true
+      community-id-seed: 0
+      types:
+        - alert:
+            tagged-packets: yes
+            metadata:
+              app-layer: true
+              flow: true
+              rule:
+                metadata: true
+                raw: false
+        - stats:
+            totals: yes
+            threads: no
+            deltas: no
+
+  # Full-packet ring buffer. Size is bounded at 100 MiB per file × at most 100 files (10 GiB),
+  # and the nsm-retention timer deletes files older than 24 hours. /data/pcap is mounted as the directory.
+  - pcap-log:
+      enabled: yes
+      filename: log.pcap
+      dir: /var/log/suricata/pcap
+      limit: 100 MiB
+      max-files: 100
+      compression: none
+      mode: normal
+      use-stream-depth: no
+      honor-pass-rules: no
+      conditional: all
+
+default-rule-path: /var/lib/suricata/rules
+
+# suricata.rules: ET Open (refreshed in /data/suricata/rules by the nsm-rules-update timer, DET-001)
+# local.rules: our own rules (detections/suricata)
+rule-files:
+  - suricata.rules
+  - /nsm/rules/local.rules

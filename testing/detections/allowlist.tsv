@@ -1,0 +1,5 @@
+id	detection_id	match_type	value	reason	expires_at	enabled
+TUNE-901-TEST	DET-101	sni_suffix	.allowed.test	fixture: active SNI suffix entry must suppress a regular TLS beacon	2030-01-01 00:00:00	true
+TUNE-902-TEST	DET-107	dst_ip	198.51.100.173	fixture: active IP entry must suppress an upload	2030-01-01 00:00:00	true
+TUNE-903-TEST	DET-102	dst_cidr	198.51.100.122/32	fixture: expired entry must not suppress	2020-01-01 00:00:00	true
+TUNE-904-TEST	DET-108	dst_ip	198.51.100.184	fixture: disabled entry must not suppress	2030-01-01 00:00:00	false

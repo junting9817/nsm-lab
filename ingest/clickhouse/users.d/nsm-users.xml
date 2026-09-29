@@ -1,0 +1,95 @@
+<!--
+  ClickHouse accounts and privileges.
+  - default       : localhost inside the container only (administration via docker exec); no network access
+  - vector_ingest : used by Vector to load data; INSERT/SELECT on the nsm database
+  - grafana_ro    : used by Grafana; SELECT on nsm only, query memory and time limits pinned by constraints (docs/architecture.md D3)
+  - nsm_responder : Phase 6 responder; INSERT on the response tables, SELECT on the evidence tables only
+  The allowed network 172.30.0.0/24 must match the nsm network in docker-compose.yml.
+-->
+<clickhouse>
+    <profiles>
+        <default>
+            <max_threads>2</max_threads>
+            <max_memory_usage>1073741824</max_memory_usage>
+            <max_bytes_before_external_group_by>536870912</max_bytes_before_external_group_by>
+            <max_bytes_before_external_sort>536870912</max_bytes_before_external_sort>
+            <input_format_parallel_parsing>0</input_format_parallel_parsing>
+            <output_format_parallel_formatting>0</output_format_parallel_formatting>
+        </default>
+
+        <grafana_readonly>
+            <profile>default</profile>
+            <!-- 2 = read plus changing session settings (the Grafana plugin sends settings); no writes, no DDL -->
+            <readonly>2</readonly>
+            <max_memory_usage>536870912</max_memory_usage>
+            <max_execution_time>30</max_execution_time>
+            <max_bytes_before_external_group_by>268435456</max_bytes_before_external_group_by>
+            <max_bytes_before_external_sort>268435456</max_bytes_before_external_sort>
+            <constraints>
+                <max_memory_usage>
+                    <max>536870912</max>
+                </max_memory_usage>
+                <max_execution_time>
+                    <max>60</max>
+                </max_execution_time>
+                <max_threads>
+                    <max>2</max>
+                </max_threads>
+            </constraints>
+        </grafana_readonly>
+    </profiles>
+
+    <users>
+        <default>
+            <networks replace="replace">
+                <ip>::1</ip>
+                <ip>127.0.0.1</ip>
+            </networks>
+            <access_management>1</access_management>
+        </default>
+
+        <vector_ingest>
+            <password from_env="CH_VECTOR_PASSWORD"/>
+            <networks>
+                <ip>172.30.0.0/24</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT INSERT, SELECT ON nsm.*</query>
+            </grants>
+        </vector_ingest>
+
+        <grafana_ro>
+            <password from_env="CH_GRAFANA_PASSWORD"/>
+            <networks>
+                <ip>172.30.0.0/24</ip>
+            </networks>
+            <profile>grafana_readonly</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT SELECT ON nsm.*</query>
+                <!-- Read-only access to the sibling projects' own databases, so their dashboards can be provisioned
+                     into this Grafana. They never write here and this account never writes anywhere. -->
+                <query>GRANT SELECT ON ct.*</query>
+            </grants>
+        </grafana_ro>
+
+        <!-- Phase 6 responder: records decisions and firewall applies, reads the evidence tables it acts on -->
+        <nsm_responder>
+            <password from_env="CH_RESPONDER_PASSWORD"/>
+            <networks>
+                <ip>172.30.0.0/24</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT INSERT, SELECT ON nsm.response_actions</query>
+                <query>GRANT INSERT, SELECT ON nsm.response_applies</query>
+                <query>GRANT SELECT ON nsm.cowrie_events</query>
+                <query>GRANT SELECT ON nsm.suricata_alert</query>
+                <query>GRANT SELECT ON nsm.zeek_conn</query>
+            </grants>
+        </nsm_responder>
+    </users>
+</clickhouse>

@@ -1,0 +1,26 @@
+# --- secrets ---
+.env
+*.env
+!.env.example
+
+# --- Terraform (state holds resource details, never commit it) ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# --- runtime data (lives on the /data disk) ---
+*.pcap
+*.pcapng
+# Synthetic PCAPs for the validation harness are committed (reproducible, a few KB)
+!testing/pcap/samples/*.pcap
+
+# --- misc ---
+__pycache__/
+*.pyc
+.DS_Store
+*.swp

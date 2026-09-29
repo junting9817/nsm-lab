@@ -1,0 +1,557 @@
+{
+  "uid": "nsm-c2-hunt",
+  "title": "NSM — C2 Hunt",
+  "description": "Outbound behavior of the sensor: beaconing, rare clients, uploads, TLS anomalies and the C2 detections.",
+  "tags": [
+    "nsm",
+    "phase7",
+    "c2",
+    "hunt"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "schemaVersion": 41,
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Outbound connections",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS connections FROM nsm.zeek_conn WHERE $__timeFilter(ts) AND local_orig AND NOT local_resp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Connections the sensor opened to the internet",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "External destinations",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT uniqExact(id_resp_h) AS destinations FROM nsm.zeek_conn WHERE $__timeFilter(ts) AND local_orig AND NOT local_resp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Distinct external addresses contacted",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Uploaded",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT sum(orig_bytes) AS uploaded FROM nsm.zeek_conn WHERE $__timeFilter(ts) AND local_orig AND NOT local_resp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Payload bytes sent to the internet",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "C2 findings now",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT count() AS findings FROM nsm.detection_hits WHERE run_at = (SELECT max(run_at) FROM nsm.detection_runs WHERE NOT backfill) AND detection_id IN ('DET-101', 'DET-102', 'DET-103', 'DET-104', 'DET-107', 'DET-108')"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Latest run of the C2 and exfiltration detections (DET-101/102/103/104/107/108)",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "C2 and exfiltration findings (latest run)",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT h.detection_id AS detection, h.src AS source, h.dst AS destination, h.dst_port AS port, h.score AS finding_score, h.summary AS what, if(dv.latest_verdict = '', 'unreviewed', dv.latest_verdict) AS verdict FROM nsm.detection_hits AS h LEFT JOIN (SELECT subject, argMax(verdict, created_at) AS latest_verdict FROM nsm.verdicts WHERE source = 'detection' GROUP BY subject) AS dv ON dv.subject = h.hit_key WHERE h.run_at = (SELECT max(run_at) FROM nsm.detection_runs WHERE NOT backfill) AND h.detection_id IN ('DET-101', 'DET-102', 'DET-103', 'DET-104', 'DET-107', 'DET-108') ORDER BY finding_score DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Allowlisted software (docs/tuning-log.md) is already filtered out; what remains needs a verdict",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Most regular outbound pairs",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT dst AS destination, port, sni, conns AS connections, round(med) AS median_interval_s, round(mad, 1) AS mad_s, round(mad / greatest(med, 1), 3) AS irregularity FROM (SELECT c.id_resp_h AS dst, c.id_resp_p AS port, anyIf(s.server_name, s.server_name != '') AS sni, count() AS conns, arrayPopFront(arrayDifference(arraySort(groupArray(toFloat64(c.ts))))) AS gaps, arrayReduce('median', gaps) AS med, arrayReduce('median', arrayMap(g -> abs(g - med), gaps)) AS mad FROM nsm.zeek_conn AS c LEFT JOIN (SELECT uid, server_name FROM nsm.zeek_ssl WHERE $__timeFilter(ts)) AS s ON s.uid = c.uid WHERE $__timeFilter(c.ts) AND c.local_orig AND NOT c.local_resp GROUP BY dst, port HAVING conns >= 10) WHERE med >= 5 ORDER BY irregularity ASC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Hunting view of DET-101's idea: low MAD relative to the median interval means clockwork check-ins. Includes allowlisted software",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Top destinations by upload",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT c.id_resp_h AS destination, anyIf(s.server_name, s.server_name != '') AS sni, count() AS connections, sum(c.orig_bytes) AS bytes_up, sum(c.resp_bytes) AS bytes_down, round(sum(c.orig_bytes) / greatest(sum(c.orig_bytes) + sum(c.resp_bytes), 1), 2) AS upload_ratio FROM nsm.zeek_conn AS c LEFT JOIN (SELECT uid, server_name FROM nsm.zeek_ssl WHERE $__timeFilter(ts)) AS s ON s.uid = c.uid WHERE $__timeFilter(c.ts) AND c.local_orig AND NOT c.local_resp GROUP BY destination ORDER BY bytes_up DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "upload_ratio near 1 = mostly sending (DET-107 looks for this at volume)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Rarest TLS client fingerprints (JA4)",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT ja4, count() AS sessions, uniqExact(server_name) AS server_names, arrayStringConcat(groupUniqArray(3)(server_name), ', ') AS sample_sni, min(ts) AS first_seen FROM nsm.zeek_ssl WHERE $__timeFilter(ts) AND ja4 != '' AND isIPAddressInRange(id_orig_h, '10.128.0.0/9') GROUP BY ja4 ORDER BY sessions ASC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Clients seen least often from the sensor; DET-103 compares against a longer baseline",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Outbound TLS without SNI",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT id_resp_h AS destination, id_resp_p AS port, count() AS sessions, anyIf(ja4, ja4 != '') AS client_ja4, max(ts) AS last_seen FROM nsm.zeek_ssl WHERE $__timeFilter(ts) AND server_name = '' AND isIPAddressInRange(id_orig_h, '10.128.0.0/9') GROUP BY destination, port ORDER BY sessions DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Tools that connect to raw IPs skip SNI; so do sessions Zeek picked up mid-stream after a restart (no handshake seen)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Protocols on unusual ports (outbound)",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT service AS detected, id_resp_p AS port, count() AS connections, uniqExact(id_resp_h) AS destinations FROM nsm.zeek_conn WHERE $__timeFilter(ts) AND local_orig AND NOT local_resp AND service != '' AND NOT ((service = 'ssl' AND id_resp_p = 443) OR (service = 'http' AND id_resp_p = 80) OR (service = 'dns' AND id_resp_p = 53) OR (service = 'ntp' AND id_resp_p = 123) OR (service = 'ssh' AND id_resp_p = 22)) GROUP BY detected, port ORDER BY connections DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Payload-identified protocol on a port it does not usually use (DET-108)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Certificate validation problems",
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT server_name AS sni, id_resp_h AS server, validation_status AS status, anyIf(issuer, issuer != '') AS cert_issuer, count() AS sessions FROM nsm.zeek_ssl WHERE $__timeFilter(ts) AND validation_status NOT IN ('', 'ok') GROUP BY sni, server, status ORDER BY sessions DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "TLS 1.3 encrypts certificates, so most sessions have no validation result; TLS 1.2 ones do (DET-104)",
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Outbound bytes",
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "nsm-clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "nsm-clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(orig_bytes) AS sent, sum(resp_bytes) AS received FROM nsm.zeek_conn WHERE $__timeFilter(ts) AND local_orig AND NOT local_resp GROUP BY time ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "description": "Payload bytes to and from the internet",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,329 @@
+# Vector pipeline
+#   Zeek JSON logs   → zeek_rows     → sink clickhouse_zeek     → nsm.zeek_<log type>
+#   Suricata EVE     → suricata_rows → sink clickhouse_suricata → nsm.suricata_<alert|stats>
+#   Vector metrics   → ...           → sink clickhouse_metrics  → nsm.vector_internal_metrics
+#   Cowrie honeypot  → cowrie_rows   → sink clickhouse_honeypot → nsm.cowrie_events (pulled one-way from a bucket, Phase 5)
+# One sink per family, so a Zeek backlog never blocks the alert path.
+data_dir: /var/lib/vector
+
+# Secrets: docker compose places .env values in /run/secrets/<name> files.
+# Since Vector 0.58, ${ENV} interpolation in config files is off by default (it needs --dangerously-allow-env-var-interpolation),
+# so they are read through the directory secret backend instead. Reference format: SECRET[compose.<file name>]
+secret:
+  compose:
+    type: directory
+    path: /run/secrets
+
+api:
+  enabled: true
+  address: 127.0.0.1:8686 # inside the container only (docker exec nsm-vector vector top)
+
+# DB-IP Lite country and ASN databases (CC BY 4.0), refreshed monthly by nsm-geoip-update.timer.
+# Used for honeypot sources, Suricata alert sources, and the remote end of every Zeek connection.
+enrichment_tables:
+  dbip_country:
+    type: mmdb
+    path: /data/geoip/dbip-country-lite.mmdb
+  dbip_asn:
+    type: mmdb
+    path: /data/geoip/dbip-asn-lite.mmdb
+
+sources:
+  vector_metrics:
+    type: internal_metrics
+    scrape_interval_secs: 30
+
+  # Zeek renames conn.log → conn.YYYY-MM-DD-HH-MM-SS.log every hour.
+  # Files are identified by content fingerprint (checksum), so reading continues across renames without duplicates.
+  zeek_logs:
+    type: file
+    include:
+      - /data/logs/zeek/conn.log
+      - /data/logs/zeek/conn.*.log
+      - /data/logs/zeek/dns.log
+      - /data/logs/zeek/dns.*.log
+      - /data/logs/zeek/http.log
+      - /data/logs/zeek/http.*.log
+      - /data/logs/zeek/ssl.log
+      - /data/logs/zeek/ssl.*.log
+      - /data/logs/zeek/x509.log
+      - /data/logs/zeek/x509.*.log
+      - /data/logs/zeek/notice.log
+      - /data/logs/zeek/notice.*.log
+    read_from: beginning
+    # Skip files older than the raw log retention (48 h)
+    ignore_older_secs: 172800
+
+  # The nsm-retention timer renames Suricata's eve.json to eve.<time>.json every hour.
+  suricata_eve:
+    type: file
+    include:
+      - /data/logs/suricata/eve.json
+      - /data/logs/suricata/eve.*.json
+    read_from: beginning
+    ignore_older_secs: 172800
+
+  # Cowrie events pulled from the one-way honeypot bucket by nsm-honeypot-pull (one file per UTC day, appended).
+  honeypot_cowrie:
+    type: file
+    include:
+      - /data/logs/honeypot/cowrie/cowrie-*.json
+    read_from: beginning
+    ignore_older_secs: 172800
+
+transforms:
+  # Keep only the metrics needed for pipeline health (all of them would add rows for nothing)
+  vector_metrics_filtered:
+    type: filter
+    inputs: [vector_metrics]
+    condition: |
+      includes([
+        "component_received_events_total",
+        "component_sent_events_total",
+        "component_errors_total",
+        "component_discarded_events_total",
+        "buffer_events",
+        "buffer_byte_size",
+        "utilization",
+        "uptime_seconds"
+      ], .name)
+
+  vector_metrics_as_log:
+    type: metric_to_log
+    inputs: [vector_metrics_filtered]
+
+  # Flatten into the ClickHouse table's columns (counters and gauges only)
+  vector_metrics_rows:
+    type: remap
+    inputs: [vector_metrics_as_log]
+    drop_on_abort: true
+    source: |
+      value = null
+      if exists(.counter.value) {
+        value = .counter.value
+      } else if exists(.gauge.value) {
+        value = .gauge.value
+      }
+      if value == null { abort }
+
+      ts = .timestamp
+      if !is_timestamp(ts) { ts = now() }
+
+      . = {
+        "timestamp": ts,
+        "name": .name,
+        "namespace": string(.namespace) ?? "",
+        "kind": .kind,
+        "tags": object(.tags) ?? {},
+        "value": value
+      }
+
+  # One Zeek JSON line → one row in nsm.zeek_<log type>
+  #  - dots in field names become underscores: id.orig_h → id_orig_h (Zeek JSON is flat, so top-level keys are enough)
+  #  - Zeek times (epoch seconds, float) → timestamps
+  zeek_rows:
+    type: remap
+    inputs: [zeek_logs]
+    drop_on_error: true
+    source: |
+      log_type = parse_regex!(string!(.file), r'/(?P<name>conn|dns|http|ssl|x509|notice)(?:\.[0-9-]+)?\.log$').name
+      raw = object!(parse_json!(string!(.message)))
+
+      . = map_keys(raw) -> |key| { replace(key, ".", "_") }
+
+      .ts = from_unix_timestamp!(to_int(float!(.ts) * 1000000), unit: "microseconds")
+
+      # conn only: label the direction and geolocate the far end. Zeek already knows which side is ours
+      # (Site::local_nets), so the remote address is read from local_orig/local_resp rather than guessed — that is
+      # also what keeps our own address off the map.
+      if log_type == "conn" {
+        orig_is_local = bool(.local_orig) ?? true
+        resp_is_local = bool(.local_resp) ?? true
+        remote = ""
+        if !orig_is_local {
+          remote = string(.id_orig_h) ?? ""
+          .direction = "inbound"
+        } else if !resp_is_local {
+          remote = string(.id_resp_h) ?? ""
+          .direction = "outbound"
+        } else {
+          .direction = "internal"
+        }
+        .remote_ip = remote
+        if remote != "" {
+          conn_country = get_enrichment_table_record("dbip_country", {"ip": remote}) ?? {}
+          conn_asn = get_enrichment_table_record("dbip_asn", {"ip": remote}) ?? {}
+          .remote_country_code = string(conn_country.country.iso_code) ?? ""
+          .remote_country = string(conn_country.country.names.en) ?? ""
+          .remote_asn = int(conn_asn.autonomous_system_number) ?? 0
+          .remote_as_org = string(conn_asn.autonomous_system_organization) ?? ""
+        }
+      }
+      if log_type == "x509" {
+        if exists(.certificate_not_valid_before) {
+          .certificate_not_valid_before = from_unix_timestamp!(to_int(float!(.certificate_not_valid_before) * 1000000), unit: "microseconds")
+        }
+        if exists(.certificate_not_valid_after) {
+          .certificate_not_valid_after = from_unix_timestamp!(to_int(float!(.certificate_not_valid_after) * 1000000), unit: "microseconds")
+        }
+      }
+      ._log = log_type
+
+  # One Suricata EVE line → one row in nsm.suricata_alert / nsm.suricata_stats
+  #  - nested objects are flattened with underscores: alert.signature_id → alert_signature_id
+  #  - events other than alert/stats are dropped (the EVE config only enables those two)
+  suricata_rows:
+    type: remap
+    inputs: [suricata_eve]
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      line = string!(.message)
+      event = object!(parse_json!(line))
+      event_type = string!(event.event_type)
+
+      if !includes(["alert", "stats"], event_type) { abort }
+
+      . = flatten(event, separator: "_")
+      .timestamp = parse_timestamp!(string!(event.timestamp), format: "%Y-%m-%dT%H:%M:%S%.f%z")
+      if event_type == "alert" {
+        if exists(event.flow.start) {
+          .flow_start = parse_timestamp!(string!(event.flow.start), format: "%Y-%m-%dT%H:%M:%S%.f%z")
+        }
+        .raw = line
+
+        # Private sources (docker networks, the metadata server) simply return nothing from the database, which is
+        # the honest answer rather than a placeholder.
+        alert_src = string(.src_ip) ?? ""
+        if alert_src != "" {
+          alert_country = get_enrichment_table_record("dbip_country", {"ip": alert_src}) ?? {}
+          alert_asn = get_enrichment_table_record("dbip_asn", {"ip": alert_src}) ?? {}
+          .src_country_code = string(alert_country.country.iso_code) ?? ""
+          .src_country = string(alert_country.country.names.en) ?? ""
+          .src_asn = int(alert_asn.autonomous_system_number) ?? 0
+          .src_as_org = string(alert_asn.autonomous_system_organization) ?? ""
+        }
+      }
+      ._event = event_type
+
+  # One Cowrie JSON line → one row in nsm.cowrie_events, enriched with the source's country and ASN.
+  # The honeypot is assumed compromised: only known fields are copied with forced types, anything that is not a
+  # cowrie.* event is dropped, and lookups that fail (private or unknown addresses) leave the geo columns empty.
+  cowrie_rows:
+    type: remap
+    inputs: [honeypot_cowrie]
+    drop_on_error: true
+    drop_on_abort: true
+    source: |
+      line = string!(.message)
+      event = object!(parse_json!(line))
+      eventid = string!(event.eventid)
+      if !starts_with(eventid, "cowrie.") { abort }
+      src_ip = string(event.src_ip) ?? ""
+
+      . = {
+        "timestamp": parse_timestamp!(string!(event.timestamp), format: "%Y-%m-%dT%H:%M:%S%.fZ"),
+        "eventid": eventid,
+        "sensor": string(event.sensor) ?? "",
+        "session": string(event.session) ?? "",
+        "protocol": string(event.protocol) ?? "",
+        "src_ip": src_ip,
+        "src_port": int(event.src_port) ?? 0,
+        "dst_ip": string(event.dst_ip) ?? "",
+        "dst_port": int(event.dst_port) ?? 0,
+        "username": string(event.username) ?? "",
+        "password": string(event.password) ?? "",
+        "input": string(event.input) ?? "",
+        "client_version": string(event.version) ?? "",
+        "hassh": string(event.hassh) ?? "",
+        "duration_ms": int(event.duration_ms) ?? 0,
+        "url": string(event.url) ?? "",
+        "shasum": string(event.shasum) ?? "",
+        "message": string(event.message) ?? "",
+        "raw": line
+      }
+
+      country = get_enrichment_table_record("dbip_country", {"ip": src_ip}) ?? {}
+      asn = get_enrichment_table_record("dbip_asn", {"ip": src_ip}) ?? {}
+      .src_country_code = string(country.country.iso_code) ?? ""
+      .src_country = string(country.country.names.en) ?? ""
+      .src_asn = int(asn.autonomous_system_number) ?? 0
+      .src_as_org = string(asn.autonomous_system_organization) ?? ""
+
+# All sinks: fields without a column (_log, _event, ...) are ignored, and a disk buffer keeps events if ClickHouse is down.
+# Table name templates need a static prefix (Vector 0.58 template path restriction).
+sinks:
+  clickhouse_zeek:
+    type: clickhouse
+    inputs: [zeek_rows]
+    endpoint: http://clickhouse:8123
+    database: nsm
+    table: "zeek_{{ _log }}"
+    auth: &ch_auth
+      strategy: basic
+      user: vector_ingest
+      password: "SECRET[compose.ch_vector_password]"
+    skip_unknown_fields: true
+    date_time_best_effort: true
+    compression: gzip
+    batch:
+      max_events: 10000
+      timeout_secs: 5
+    buffer:
+      type: disk
+      max_size: 1073741824 # 1 GiB
+      when_full: block
+
+  clickhouse_suricata:
+    type: clickhouse
+    inputs: [suricata_rows]
+    endpoint: http://clickhouse:8123
+    database: nsm
+    table: "suricata_{{ _event }}"
+    auth: *ch_auth
+    skip_unknown_fields: true
+    date_time_best_effort: true
+    compression: gzip
+    batch:
+      max_events: 1000
+      timeout_secs: 2 # alerts must show up fast (MTTD)
+    buffer:
+      type: disk
+      max_size: 536870912 # 512 MiB
+      when_full: block
+
+  clickhouse_honeypot:
+    type: clickhouse
+    inputs: [cowrie_rows]
+    endpoint: http://clickhouse:8123
+    database: nsm
+    table: cowrie_events
+    auth: *ch_auth
+    skip_unknown_fields: true
+    date_time_best_effort: true
+    compression: gzip
+    batch:
+      max_events: 5000
+      timeout_secs: 5
+    buffer:
+      type: disk
+      max_size: 268435488 # minimum disk buffer size
+      when_full: block
+
+  clickhouse_metrics:
+    type: clickhouse
+    inputs: [vector_metrics_rows]
+    endpoint: http://clickhouse:8123
+    database: nsm
+    table: vector_internal_metrics
+    auth: *ch_auth
+    skip_unknown_fields: true
+    date_time_best_effort: true
+    compression: gzip
+    batch:
+      max_events: 5000
+      timeout_secs: 10
+    buffer:
+      type: disk
+      max_size: 268435488 # minimum disk buffer size
+      when_full: block

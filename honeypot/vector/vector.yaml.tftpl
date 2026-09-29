@@ -1,0 +1,46 @@
+# Vector on the honeypot VM: ship Cowrie's JSON log lines unchanged to a Cloud Storage bucket.
+# Rendered by Terraform (templatefile) into instance metadata; ${bucket} is the only template variable.
+#
+# One-way transfer: the VM's service account holds only roles/storage.objectCreator on the bucket, so it can add
+# objects but cannot read, overwrite or delete them. Nothing is parsed here — the honeypot is treated as hostile,
+# and parsing and enrichment happen on the dashboard VM (ingest/vector/vector.yaml).
+data_dir: /var/lib/vector
+
+sources:
+  cowrie_json:
+    type: file
+    include:
+      - /cowrie/log/cowrie.json
+      - /cowrie/log/cowrie.json.*
+    read_from: beginning
+    ignore_older_secs: 604800
+
+sinks:
+  cowrie_bucket:
+    type: gcp_cloud_storage
+    inputs: [cowrie_json]
+    bucket: ${bucket}
+    # Object names sort by upload time (one flat prefix, one request at a time), so the dashboard VM lists only
+    # objects newer than what it already pulled. A date in the prefix would come from event time and could sort
+    # a late batch before one that was already pulled.
+    key_prefix: "cowrie/"
+    filename_time_format: "%Y%m%dT%H%M%SZ"
+    filename_append_uuid: true
+    filename_extension: "json.gz"
+    compression: gzip
+    encoding:
+      codec: text # the raw Cowrie JSON line
+    framing:
+      method: newline_delimited
+    batch:
+      timeout_secs: 60
+      max_bytes: 10485760
+    request:
+      concurrency: 1
+    # The healthcheck reads bucket metadata, which objectCreator is not allowed to do.
+    healthcheck:
+      enabled: false
+    buffer:
+      type: disk
+      max_size: 268435488 # minimum disk buffer size; keeps logs while Cloud Storage is unreachable
+      when_full: block

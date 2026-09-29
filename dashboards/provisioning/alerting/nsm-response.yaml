@@ -1,0 +1,147 @@
+# Phase 6 response triggers → nsm-responder webhook (docs/detection-catalog.md "Response triggers", RSP-001..003).
+# Each rule returns one row per source IP; Grafana turns the src_ip column into a label, so every IP is its own alert.
+# The responder makes the block decision (never-block list, caps, TTL); Grafana only reports what it saw.
+# $RESPONDER_WEBHOOK_TOKEN comes from the Grafana container environment (docker-compose.yml, .env).
+# RSP-002 ignores Grafana's own datasource API (/api/ds/query): dashboard SQL in POST bodies matches SQL injection signatures (TUNE-011).
+# repeat_interval 30m: a source that keeps attacking must be re-notified soon after enforcement starts or a block expires;
+# with 4h the first automatic block (157.10.198.167) waited 35 min for the next repeat. Repeats for active blocks are skipped.
+apiVersion: 1
+contactPoints:
+- orgId: 1
+  name: nsm-responder
+  receivers:
+  - uid: nsm-responder-webhook
+    type: webhook
+    disableResolveMessage: true
+    settings:
+      url: http://nsm-responder:8080/grafana
+      httpMethod: POST
+      authorization_scheme: Bearer
+      authorization_credentials: $RESPONDER_WEBHOOK_TOKEN
+policies:
+- orgId: 1
+  receiver: nsm-responder
+  group_by:
+  - alertname
+  - src_ip
+  group_wait: 5s
+  group_interval: 1m
+  repeat_interval: 30m
+groups:
+- orgId: 1
+  name: nsm-response
+  folder: NSM
+  interval: 1m
+  rules:
+  - uid: nsm-rsp-honeypot
+    title: RSP-001 Honeypot attacker
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: nsm-clickhouse
+      model:
+        refId: A
+        editorType: sql
+        format: 1
+        queryType: table
+        rawSql: SELECT src_ip, toFloat64(1) AS value FROM nsm.cowrie_events WHERE timestamp > now() - INTERVAL 15 MINUTE AND src_ip != '' GROUP BY src_ip HAVING (countIf(eventid = 'cowrie.login.success')
+          >= 1 AND countIf(eventid IN ('cowrie.command.input', 'cowrie.session.file_upload', 'cowrie.session.file_download', 'cowrie.session.file_download.failed')) >= 1) OR countIf(eventid = 'cowrie.login.failed')
+          >= 20
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    isPaused: false
+    labels:
+      nsm_trigger: honeypot
+      nsm_response: 'true'
+    annotations:
+      summary: '{{ $labels.src_ip }} logged in to the honeypot and ran commands or transferred files, or failed 20+ logins in 15 min'
+      runbook: docs/detection-catalog.md (Response triggers)
+  - uid: nsm-rsp-suricata
+    title: RSP-002 Severe Suricata alert
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: nsm-clickhouse
+      model:
+        refId: A
+        editorType: sql
+        format: 1
+        queryType: table
+        rawSql: SELECT src_ip, toFloat64(count()) AS value FROM nsm.suricata_alert WHERE timestamp > now() - INTERVAL 10 MINUTE AND alert_severity = 1 AND in_iface = 'ens4' AND isIPAddressInRange(dest_ip,
+          '10.128.0.0/9') AND NOT isIPAddressInRange(src_ip, '10.128.0.0/9') AND NOT startsWith(http_url, '/api/ds/query') GROUP BY src_ip
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    isPaused: false
+    labels:
+      nsm_trigger: suricata
+      nsm_response: 'true'
+    annotations:
+      summary: '{{ $labels.src_ip }} triggered severity-1 Suricata alerts against the sensor'
+      runbook: docs/detection-catalog.md (Response triggers)
+  - uid: nsm-rsp-scanner
+    title: RSP-003 SSH brute force or scanning (observe only)
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: nsm-clickhouse
+      model:
+        refId: A
+        editorType: sql
+        format: 1
+        queryType: table
+        rawSql: SELECT id_orig_h AS src_ip, toFloat64(count()) AS value FROM nsm.zeek_conn WHERE ts > now() - INTERVAL 10 MINUTE AND id_resp_p = 22 AND NOT local_orig AND local_resp GROUP BY id_orig_h HAVING
+          count() >= 30
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    isPaused: false
+    labels:
+      nsm_trigger: scanner
+      nsm_response: 'true'
+    annotations:
+      summary: '{{ $labels.src_ip }} opened 30+ SSH connections to the sensor in 10 min'
+      runbook: docs/detection-catalog.md (Response triggers)

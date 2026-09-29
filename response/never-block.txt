@@ -1,0 +1,8 @@
+# Addresses the responder must never block, one "<CIDR> <reason>" per line. Loaded on every decision.
+# Instance-specific addresses (this sensor's and the honeypot's external IPs) are written to /etc/nsm/never-block.local
+# by infra/scripts/setup-response.sh. Private, link-local and documentation ranges are rejected by the policy anyway.
+35.235.240.0/20 IAP TCP forwarding (admin SSH)
+35.191.0.0/16 Google Cloud health checks
+130.211.0.0/22 Google Cloud health checks
+209.85.152.0/22 Google Cloud legacy health checks
+209.85.204.0/22 Google Cloud legacy health checks
